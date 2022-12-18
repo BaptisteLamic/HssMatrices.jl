@@ -24,7 +24,7 @@ function _compress_block!(A::AbstractMatrix{T}, atol::Float64, rtol::Float64) wh
   #rk = min(size(R)...)
   #return Q[:,1:rk], R[1:rk, invperm(p)]
   # temporarily using prrqr of LowRankApprox.jl - may be replaced in the future to reduce dependencies
-  F = pqrfact(A; atol = atol, rtol = rtol, sketch=:none, pqrfact_retval = "qr")
+  F = pqrfact(A; atol = atol/2, rtol = rtol/2, sketch=:none, pqrfact_retval = "qr")
   #rk = min(size(F.R)...)
   return F.Q, F.R[:, invperm(F.p)]
 end

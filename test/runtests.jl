@@ -1,5 +1,6 @@
 using Test, LinearAlgebra, HssMatrices
 
+
 @testset "options" begin
     HssMatrices.setopts(atol=1e-6)
     @test HssOptions().atol == 1e-6
@@ -63,5 +64,28 @@ end
         hssI.A11 = prune_leaves!(hssI.A11)
         @test norm(Ainv - full(hssA\hssI))/norm(Ainv) ≤ c*HssOptions().rtol || norm(Ainv - full(hssA\hssI)) ≤ c*HssOptions().atol
         @test norm(Ainv - full(hssI/hssA))/norm(Ainv) ≤ c*HssOptions().rtol || norm(Ainv - full(hssI/hssA)) ≤ c*HssOptions().atol
+    end
+    @testset "edge case: illcompressed triangular matrix " begin
+        n_edge = 4
+        nd_edge = 2
+        function triangular_matrix(T,n)
+            n = n ÷ 2
+            D1,D2,A1 = randn(T,n,n),randn(T,n,n),randn(T,n,n)
+            A2 = zeros(T,n,n)
+            A = [D1 A1; A2 D2]
+            return A
+        end
+        A = triangular_matrix(T,n_edge);
+        B = triangular_matrix(T,n_edge);
+        hssA = hss(A, leafsize=nd_edge, atol=1e-6, rtol=1e-6);
+        hssB = hss(B, leafsize=nd_edge, atol=1e-6, rtol=1e-6);
+        U_edge = randn(T,n_edge,60); V_edge = zeros(T,n_edge,60)
+        rcl = bisection_cluster(1:n_edge,leafsize = nd_edge)
+        ccl = bisection_cluster(1:n_edge,leafsize = nd_edge)
+        hssC = lowrank2hss(U_edge, V_edge, ccl, ccl)
+        hssD = hssC + hssB
+        expected = full(hssD)\full(hssB)
+        hss_result = hssD\hssB
+        @test norm(expected - full(hss_result))/norm(expected) ≤ c*HssOptions().rtol || norm(expected - full(hss_result)) ≤ c*HssOptions().atol
     end
 end 

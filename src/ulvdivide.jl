@@ -10,7 +10,7 @@
 # Written by Boris Bonev, Feb. 2021
 
 # function for acess that imitate the behavior in LinearAlgebra.jl
-ldiv!(hssA::HssMatrix, hssB::HssMatrix) = _ldiv!(copy(hssA), hssB)
+ldiv!(hssA::HssMatrix, hssB::HssMatrix) = _ldiv!(recompress!(copy(hssA)), hssB)
 # lazy implementation of rdiv!
 function rdiv!(hssA::HssMatrix, hssB::HssMatrix)
   hssA = adjoint(_ldiv!(adjoint(hssB), adjoint(hssA)))
