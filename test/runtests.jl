@@ -1,5 +1,6 @@
 using Test, LinearAlgebra, HssMatrices
 
+
 @testset "options" begin
     HssMatrices.setopts(atol=1e-6)
     @test HssOptions().atol == 1e-6
@@ -11,6 +12,25 @@ using Test, LinearAlgebra, HssMatrices
     @test HssOptions().noversampling == 5
     HssMatrices.setopts(stepsize=10)
     @test HssOptions().stepsize == 10
+end
+
+@testset "error handling" begin 
+    n = 128
+    k = 1
+    A = hss(diagm(0=>randn(n)),leafsize = 32)
+    B = hss(diagm(k=>randn(n-k)),leafsize = 16)
+    try
+        A+B
+        error("The test should not get here")
+    catch e
+        @test e isa ArgumentError
+    end
+    try
+        A*B
+        error("The test should not get here")
+    catch e
+        @test e isa DimensionMismatch
+    end
 end
 
 @testset for T in [Float32, Float64, ComplexF32,ComplexF64]

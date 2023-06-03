@@ -28,6 +28,8 @@ function _ldiv!(hssA::HssMatrix, hssB::HssMatrix)
     # bottom-up stage of the ULV solution algorithm
     hssL, QU, QL, QV, mk, nk, ktree  = _ulvfactor_leaves!(hssA, 0)
     hssB = _utransforms!(hssB, QU)
+    @show nk.left.data
+    @show nk.right.data
     hssQB = _extract_crows(hssB, nk)
     hssY0 = _ltransforms!(hssB, QL)
 
@@ -58,8 +60,9 @@ end
 function _ulvreduce!(D::Matrix{T}, U::Matrix{T}, V::Matrix{T}) where T
   T <: Complex ? adj = 'C' : adj = 'T'
   m, n = size(D)
+  @show size(U)
   k = size(U, 2)
-  nk = min(m-k,n)
+  nk = max(min(m-k,n),0)
   ind = 1:m-k
   cind = m-k+1:m
   # can't be compressed, exit early
@@ -197,6 +200,9 @@ function _unpackadd_rows!(hssA::HssMatrix{T}, hssB::HssMatrix{T}, ktree::BinaryN
     else
       isbranch(ktree) || throw(ArgumentError("didn't expect ktree to be a leaf node"))
       k1 = ktree.left.data; k2 = ktree.right.data
+      @show k1
+      @show k2
+      @show size(hssB,1) 
       k1 + k2 == size(hssB,1) || throw(DimensionMismatch("first dimension of D does not match the expected k1+k2 rows"))
       m1, n1 = hssA.sz1
       r, w = gensize(hssB)
