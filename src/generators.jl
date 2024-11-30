@@ -66,23 +66,7 @@ function orthonormalize_generators!(hssA::HssMatrix{T}) where T
     U1 = pqrfact!(hssA.A11.U, sketch=:none); hssA.U = Matrix(U1.Q)
     V1 = pqrfact!(hssA.A11.V, sketch=:none); hssA.V = Matrix(V1.Q)
   else
-    if isleaf(hssA.A11)
-      U1 = pqrfact!(hssA.A11.U, sketch=:none); hssA.A11.U = Matrix(U1.Q)
-      V1 = pqrfact!(hssA.A11.V, sketch=:none); hssA.A11.V = Matrix(V1.Q)
-    else
-      hssA.A11 = orthonormalize_generators!(hssA.A11)
-      U1 = pqrfact!([hssA.A11.R1; hssA.A11.R2], sketch=:none)
-      V1 = pqrfact!([hssA.A11.W1; hssA.A11.W2], sketch=:none)
-      rm1 = size(hssA.A11.R1, 1)
-      R = Matrix(U1.Q)
-      hssA.A11.R1 = R[1:rm1,:]
-      hssA.A11.R2 = R[rm1+1:end,:]
-      rn1 = size(hssA.A11.W1, 1)
-      W = Matrix(V1.Q)
-      hssA.A11.W1 = W[1:rn1,:]
-      hssA.A11.W2 = W[rn1+1:end,:]
-    end
-
+    task = Threads.@spawn _orthogonalise_A11!(hssA)
     if isleaf(hssA.A22)
       U2 = pqrfact!(hssA.A22.U, sketch=:none); hssA.A22.U = Matrix(U2.Q)
       V2 = pqrfact!(hssA.A22.V, sketch=:none); hssA.A22.V = Matrix(V2.Q)
@@ -99,6 +83,7 @@ function orthonormalize_generators!(hssA::HssMatrix{T}) where T
       hssA.A22.W1 = W[1:rn1,:]
       hssA.A22.W2 = W[rn1+1:end,:]
     end
+    U1, V1 = fetch(task)
     ipU1 = invperm(U1.p); ipV1 = invperm(V1.p)
     ipU2 = invperm(U2.p); ipV2 = invperm(V2.p)
 
@@ -111,4 +96,26 @@ function orthonormalize_generators!(hssA::HssMatrix{T}) where T
     hssA.W2 = V2.R[:, ipV2]*hssA.W2
   end
   return hssA
+end
+
+function _orthogonalise_A11!(hssA)
+  if isleaf(hssA.A11)
+    U1 = pqrfact!(hssA.A11.U, sketch=:none)
+    hssA.A11.U = Matrix(U1.Q)
+    V1 = pqrfact!(hssA.A11.V, sketch=:none)
+    hssA.A11.V = Matrix(V1.Q)
+  else
+    hssA.A11 = orthonormalize_generators!(hssA.A11)
+    U1 = pqrfact!([hssA.A11.R1; hssA.A11.R2], sketch=:none)
+    V1 = pqrfact!([hssA.A11.W1; hssA.A11.W2], sketch=:none)
+    rm1 = size(hssA.A11.R1, 1)
+    R = Matrix(U1.Q)
+    hssA.A11.R1 = R[1:rm1,:]
+    hssA.A11.R2 = R[rm1+1:end,:]
+    rn1 = size(hssA.A11.W1, 1)
+    W = Matrix(V1.Q)
+    hssA.A11.W1 = W[1:rn1,:]
+    hssA.A11.W2 = W[rn1+1:end,:]
+  end
+  return U1, V1
 end

@@ -109,8 +109,9 @@ function _matmatdown!(hssA::HssMatrix{T}, hssB::HssMatrix{T}, Z::BinaryNode{Matr
     W1 = [hssA.W1 zeros(T,size(hssA.W1,1), size(hssB.W1,2)); hssB.B21' * Z.right.data' * hssA.W2 hssB.W1];
     R2 = [hssA.R2 hssA.B21 * Z.left.data * hssB.R1; zeros(T,size(hssB.R2,1), size(hssA.R2,2)) hssB.R2];
     W2 = [hssA.W2 zeros(T,size(hssA.W2,1), size(hssB.W2,2)); hssB.B12' * Z.left.data' * hssA.W1 hssB.W2];
-    A11 = _matmatdown!(hssA.A11, hssB.A11, Z.left, F1)
+    task = Threads.@spawn _matmatdown!(hssA.A11, hssB.A11, Z.left, F1)
     A22 = _matmatdown!(hssA.A22, hssB.A22, Z.right, F2)
+    A11 = fetch(task)
     return HssMatrix(A11, A22, B12, B21, R1, W1, R2, W2, false)
   else
     error("Clusters don't seem to match")

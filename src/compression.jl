@@ -245,18 +245,22 @@ function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol
   end
 
   # call recompression recursively
-  if isbranch(hssA.A11)
-    Brow1 = hcat(hssA.B12, S2[:,rn2+1:end])
-    Bcol1 = hcat(hssA.B21', T2[:,rm2+1:end])
-    _recompress!(hssA.A11, Brow1, Bcol1, atol, rtol)
-  end
+  task = Threads.@spawn _recursive_compression_A11(hssA,S2,T2,rn2,rm2,atol,rtol)
   if isbranch(hssA.A22)
     Brow2 = hcat(hssA.B21, S1[:,rn1+1:end])
     Bcol2 = hcat(hssA.B12', T1[:,rm1+1:end])
     _recompress!(hssA.A22, Brow2, Bcol2, atol, rtol)
   end
-
+  wait(task)
   return hssA
+end
+
+function _recursive_compression_A11(hssA,S2,T2,rn2,rm2,atol,rtol)
+  if isbranch(hssA.A11)
+    Brow1 = hcat(hssA.B12, S2[:,rn2+1:end])
+    Bcol1 = hcat(hssA.B21', T2[:,rm2+1:end])
+    _recompress!(hssA.A11, Brow1, Bcol1, atol, rtol)
+  end
 end
 
 """
@@ -285,8 +289,8 @@ function randcompress(A::AbstractMatOrLinOp{T}, rcl::ClusterTree, ccl::ClusterTr
 
   # compute initial sampling
   k = kest; r = opts.noversampling;
-  Ωcol = randn(n, k+r)
-  Ωrow = randn(m, k+r)
+  Ωcol = randn(T,n, k+r)
+  Ωrow = randn(T,m, k+r)
   Scol = A*Ωcol # this should invoke the magic of the linearoperator.jl type
   Srow = A'*Ωrow
   hssA, _, _, _, _, _, _, _, _ = _randcompress!(hssA, A, Scol, Srow, Ωcol, Ωrow, 0, 0, opts.atol, opts.rtol; rootnode=true)
