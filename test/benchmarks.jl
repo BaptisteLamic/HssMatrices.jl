@@ -3,6 +3,7 @@ using .HssMatrices
 using LinearAlgebra
 using BenchmarkTools
 using Random
+BLAS.set_num_threads(1)
 Random.seed!(123)
 
 ### run benchmarks on Cauchy matrix

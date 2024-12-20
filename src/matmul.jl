@@ -55,8 +55,9 @@ function _matmatdown!(C::AbstractMatrix{T}, hssA::HssMatrix{T}, B::AbstractMatri
       F1 = hssA.B12 * Z.right.data
       F2 = hssA.B21 * Z.left.data
     end
-    _matmatdown!(@view(C[1:m1,:]), hssA.A11, @view(B[1:n1,:]), Z.left, F1, α, β)
+    task = Threads.@spawn _matmatdown!(@view(C[1:m1,:]), hssA.A11, @view(B[1:n1,:]), Z.left, F1, α, β)
     _matmatdown!(@view(C[m1+1:end,:]), hssA.A22, @view(B[n1+1:end,:]), Z.right, F2, α, β)
+    wait(task)
     return C
   end
 end
@@ -74,8 +75,9 @@ function *(hssA::HssMatrix, hssB::HssMatrix)
     F2 = hssA.B21 * Z.left.data * hssB.B12
     B12 = blkdiagm(hssA.B12, hssB.B12)
     B21 = blkdiagm(hssA.B21, hssB.B21)
+    task = Threads.@spawn _matmatdown!(hssA.A22, hssB.A22, Z.right, F2)
     A11 = _matmatdown!(hssA.A11, hssB.A11, Z.left, F1)
-    A22 = _matmatdown!(hssA.A22, hssB.A22, Z.right, F2)
+    A22 = fetch(task)
     hssC = HssMatrix(A11, A22, B12, B21, true)
   else
     error("Clusters don't seem to match")
@@ -87,8 +89,9 @@ function _matmatup(hssA::HssMatrix{T}, hssB::HssMatrix{T}) where T<:Number
   if isleaf(hssA) & isleaf(hssB)
     return BinaryNode{Matrix{T}}(hssA.V' * hssB.U)
   elseif isbranch(hssA) && isbranch(hssB)
+    task = Threads.@spawn _matmatup(hssA.A22, hssB.A22)
     Z1 = _matmatup(hssA.A11, hssB.A11)
-    Z2 = _matmatup(hssA.A22, hssB.A22)
+    Z2 = fetch(task)
     return BinaryNode(hssA.W1' * Z1.data * hssB.R1 + hssA.W2' * Z2.data * hssB.R2, Z1, Z2)
   end
 end
