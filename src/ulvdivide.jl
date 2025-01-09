@@ -97,9 +97,9 @@ function _ulvfactor_leaves!(hssA::HssMatrix{T}, co::Int) where T
     return HssMatrix(D, U, V, hssA.rootnode), QU, QL, QV, BinaryNode(mk), BinaryNode(nk), BinaryNode(k)
   else
     m1, n1 = hssA.sz1; m2, n2 = hssA.sz2
-    task = Threads.@spawn _ulvfactor_leaves!(hssA.A11, co)
+    task = RecursionTools.spawn(_ulvfactor_leaves!,(hssA.A11, co), true)
     hssA.A22, QU2, QL2, QV2, mk2, nk2, k2 = _ulvfactor_leaves!(hssA.A22, co+n1)
-    hssA.A11, QU1, QL1, QV1, mk1, nk1, k1 = fetch(task)
+    hssA.A11, QU1, QL1, QV1, mk1, nk1, k1 = RecursionTools.fetch(task)
     # update sizes
     hssA.sz1 = size(hssA.A11); hssA.sz2 = size(hssA.A22)
     QU = BinaryNode(QU1, QU2)
@@ -149,7 +149,7 @@ for (f,g) in zip((:_utransforms!, :_ltransforms!, :_vtransforms!), (:_utransform
       if isleaf(hssA)
         hssA = $g(hssA, Qtree)
       else
-        task = Threads.@spawn $f(hssA.A11, Qtree.left)
+        task = RecursionTools.spawn($f,(hssA.A11, Qtree.left), true)
         hssA.A22 = $f(hssA.A22, Qtree.right)
         hssA.A11 = fetch(task)
         hssA.sz1 = size(hssA.A11); hssA.sz2 = size(hssA.A22)
@@ -172,9 +172,9 @@ for (f,g) in zip((:_extract_nrows, :_extract_crows, :_extract_ncols, :_extract_c
       if isleaf(hssA)
         hssA = $g(hssA, ntree)
       else
-        task = Threads.@spawn $f(hssA.A11, ntree.left)
+        task = RecursionTools.spawn($f, (hssA.A11, ntree.left), true)
         A22 = $f(hssA.A22, ntree.right)
-        A11 = fetch(task)
+        A11 = RecursionTools.fetch(task)
         return HssMatrix(A11, A22, hssA.B12, hssA.B21, hssA.R1, hssA.W1, hssA.R2, hssA.W2, hssA.rootnode)
       end
     end

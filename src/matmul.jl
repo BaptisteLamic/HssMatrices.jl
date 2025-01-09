@@ -55,9 +55,9 @@ function _matmatdown!(C::AbstractMatrix{T}, hssA::HssMatrix{T}, B::AbstractMatri
       F1 = hssA.B12 * Z.right.data
       F2 = hssA.B21 * Z.left.data
     end
-    task = Threads.@spawn _matmatdown!(@view(C[1:m1,:]), hssA.A11, @view(B[1:n1,:]), Z.left, F1, α, β)
+    task = RecursionTools.spawn(_matmatdown!, (@view(C[1:m1,:]), hssA.A11, @view(B[1:n1,:]), Z.left, F1, α, β),true)
     _matmatdown!(@view(C[m1+1:end,:]), hssA.A22, @view(B[n1+1:end,:]), Z.right, F2, α, β)
-    wait(task)
+    RecursionTools.wait(task)
     return C
   end
 end
@@ -75,9 +75,9 @@ function *(hssA::HssMatrix, hssB::HssMatrix)
     F2 = hssA.B21 * Z.left.data * hssB.B12
     B12 = blkdiagm(hssA.B12, hssB.B12)
     B21 = blkdiagm(hssA.B21, hssB.B21)
-    task = Threads.@spawn _matmatdown!(hssA.A22, hssB.A22, Z.right, F2)
+    task = RecursionTools.spawn(_matmatdown!,(hssA.A22, hssB.A22, Z.right, F2),true)
     A11 = _matmatdown!(hssA.A11, hssB.A11, Z.left, F1)
-    A22 = fetch(task)
+    A22 = RecursionTools.fetch(task)
     hssC = HssMatrix(A11, A22, B12, B21, true)
   else
     error("Clusters don't seem to match")
@@ -89,7 +89,7 @@ function _matmatup(hssA::HssMatrix{T}, hssB::HssMatrix{T}) where T<:Number
   if isleaf(hssA) & isleaf(hssB)
     return BinaryNode{Matrix{T}}(hssA.V' * hssB.U)
   elseif isbranch(hssA) && isbranch(hssB)
-    task = Threads.@spawn _matmatup(hssA.A22, hssB.A22)
+    task = RecursionTools.spawn(_matmatup, (hssA.A22, hssB.A22), true)
     Z1 = _matmatup(hssA.A11, hssB.A11)
     Z2 = fetch(task)
     return BinaryNode(hssA.W1' * Z1.data * hssB.R1 + hssA.W2' * Z2.data * hssB.R2, Z1, Z2)
@@ -112,9 +112,9 @@ function _matmatdown!(hssA::HssMatrix{T}, hssB::HssMatrix{T}, Z::BinaryNode{Matr
     W1 = [hssA.W1 zeros(T,size(hssA.W1,1), size(hssB.W1,2)); hssB.B21' * Z.right.data' * hssA.W2 hssB.W1];
     R2 = [hssA.R2 hssA.B21 * Z.left.data * hssB.R1; zeros(T,size(hssB.R2,1), size(hssA.R2,2)) hssB.R2];
     W2 = [hssA.W2 zeros(T,size(hssA.W2,1), size(hssB.W2,2)); hssB.B12' * Z.left.data' * hssA.W1 hssB.W2];
-    task = Threads.@spawn _matmatdown!(hssA.A11, hssB.A11, Z.left, F1)
+    task = RecursionTools.spawn(_matmatdown!,(hssA.A11, hssB.A11, Z.left, F1),true)
     A22 = _matmatdown!(hssA.A22, hssB.A22, Z.right, F2)
-    A11 = fetch(task)
+    A11 = RecursionTools.fetch(task)
     return HssMatrix(A11, A22, B12, B21, R1, W1, R2, W2, false)
   else
     error("Clusters don't seem to match")

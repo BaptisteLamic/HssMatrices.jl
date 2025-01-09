@@ -222,9 +222,9 @@ for op in (:+,:-)
       elseif isbranch(hssA) && isbranch(hssB)
         hssA.sz1 == hssB.sz1 || throw(DimensionMismatch("A11 has dimensions $(hssA.sz1) but B11 has dimensions $(hssB.sz1)"))
         hssA.sz2 == hssB.sz2 || throw(DimensionMismatch("A22 has dimensions $(hssA.sz2) but B22 has dimensions $(hssA.sz2)"))
-        taskA11 = Threads.@spawn $op(hssA.A11, hssB.A11)
-        taskA22 = Threads.@spawn $op(hssA.A22, hssB.A22)
-        return HssMatrix(fetch(taskA11), fetch(taskA22), blkdiagm(hssA.B12, $op(hssB.B12)), blkdiagm(hssA.B21, $op(hssB.B21)),blkdiagm(hssA.R1, hssB.R1), blkdiagm(hssA.W1, hssB.W1), blkdiagm(hssA.R2, hssB.R2), blkdiagm(hssA.W2, hssB.W2), isroot(hssA) && isroot(hssB))
+        taskA11 = RecursionTools.spawn($op, (hssA.A11, hssB.A11), true)
+        taskA22 = RecursionTools.spawn($op, (hssA.A22, hssB.A22), true)
+        return HssMatrix(RecursionTools.fetch(taskA11), RecursionTools.fetch(taskA22), blkdiagm(hssA.B12, $op(hssB.B12)), blkdiagm(hssA.B21, $op(hssB.B21)),blkdiagm(hssA.R1, hssB.R1), blkdiagm(hssA.W1, hssB.W1), blkdiagm(hssA.R2, hssB.R2), blkdiagm(hssA.W2, hssB.W2), isroot(hssA) && isroot(hssB))
       else
         throw(ArgumentError("Cannot add leaves and branches."))
       end
