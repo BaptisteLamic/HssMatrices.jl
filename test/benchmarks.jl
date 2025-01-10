@@ -1,5 +1,5 @@
-#include("../src/HssMatrices.jl")
-using HssMatrices
+include("../src/HssMatrices.jl")
+using .HssMatrices
 using LinearAlgebra
 using BenchmarkTools
 using Random
@@ -10,7 +10,7 @@ for multithreaded = (false, true)
     @show multithreaded
     HssMatrices.setopts(multithreaded=multithreaded)
     ### run benchmarks on Cauchy matrix
-    K(x, y) = (x - y) != 0 ? 1 / (x - y) : 10000.0
+    K(x, y) = abs(x - y) >= 0.001 ? 1 / (x - y) : 10000.0
     A = [K(x, y) for x = -1:0.001:1, y = -1:0.001:1]
     b = randn(size(A, 2), 5)
 
@@ -56,6 +56,10 @@ for multithreaded = (false, true)
     println("Benchmarking matvec...")
     x = randn(size(A, 2), 10)
     @btime y = $hssA * $x
+
+
+    println("Benchmarking matrix products...")
+    @btime y = $hssA * $hssB
 
     # time ulvfactsolve
     println("Benchmarking ulvfactsolve...")
