@@ -28,7 +28,7 @@ function _ldiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool)
     # bottom-up stage of the ULV solution algorithm
     hssL, QU, QL, QV, mk, nk, ktree  = _ulvfactor_leaves!(hssA, 0, multithreaded)
     hssB = _utransforms!(hssB, QU, multithreaded)
-    hssQB = _extract_crows(hssB, nk)
+    hssQB = _extract_crows(hssB, nk, multithreaded)
     hssY0 = _ltransforms!(hssB, QL, multithreaded)
 
     # early exit if all remaining blocks are 0.
@@ -40,7 +40,7 @@ function _ldiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool)
     hssQB = prune_leaves!(hssQB)
 
     # reduce to the remainder block (and regain sqare HSS matrix for recursive division)
-    hssL = _extract_ccols(hssL, nk) # extract uncompressed rows to form Matrix with one less level
+    hssL = _extract_ccols(hssL, nk, multithreaded) # extract uncompressed rows to form Matrix with one less level
     hssL = prune_leaves!(hssL)
 
     # recursively call mldivide
@@ -168,12 +168,12 @@ _extract_ccols_kernel(hssA::HssMatrix, ntree::BinaryNode{Int}) = HssMatrix(hssA.
 # generate branch routines via metaprogramming
 for (f,g) in zip((:_extract_nrows, :_extract_crows, :_extract_ncols, :_extract_ccols), (:_extract_nrows_kernel, :_extract_crows_kernel, :_extract_ncols_kernel, :_extract_ccols_kernel)) 
   @eval begin
-    function $f(hssA::HssMatrix, ntree::BinaryNode{Int})
+    function $f(hssA::HssMatrix, ntree::BinaryNode{Int}, multithreaded::Bool)
       if isleaf(hssA)
         hssA = $g(hssA, ntree)
       else
-        task = RecursionTools.spawn($f, (hssA.A11, ntree.left), true)
-        A22 = $f(hssA.A22, ntree.right)
+        task = RecursionTools.spawn($f, (hssA.A11, ntree.left, multithreaded), multithreaded)
+        A22 = $f(hssA.A22, ntree.right, multithreaded)
         A11 = RecursionTools.fetch(task)
         return HssMatrix(A11, A22, hssA.B12, hssA.B21, hssA.R1, hssA.W1, hssA.R2, hssA.W2, hssA.rootnode)
       end
