@@ -1,5 +1,5 @@
 using Test, LinearAlgebra, HssMatrices
-BLAS.set_num_threads(1)
+BLAS.set_num_threads(2)
 
 @testset "options" begin
     HssMatrices.setopts(atol=1e-6)
@@ -31,8 +31,10 @@ end
 @testset for T in [Float32, Float64, ComplexF32, ComplexF64]
     @testset for multithreaded = (false, true)
         # generate Cauchy matrix
-        K(x,y) = (x-y) > 0 ? 0.001/(x-y) : 2.
-        A = [ T(K(x,y)) for x=-1:0.001:1, y=-1:0.001:1];
+        K(x,y) = abs(x-y) > 0 ? 0.001/(x-y) : 2.
+        n = 2000
+        dt = 2/n
+        A = [ T(K(x,y)) for x = -1:dt:1, y = -1:dt:1];
         if T <: Complex
             A = A + 1im .* A
         end
@@ -40,7 +42,7 @@ end
         U = randn(T,n,3); V = randn(T,n,3)
         # "safety" factor
         c = 50.
-        tol = 1E-6
+        tol = max(10*eps(real(T)), 1E-6)
         HssMatrices.setopts(atol=tol)
         HssMatrices.setopts(rtol=tol)
         HssMatrices.setopts(multithreaded=multithreaded)
