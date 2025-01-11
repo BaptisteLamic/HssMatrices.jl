@@ -194,17 +194,18 @@ function recompress!(hssA::HssMatrix{T}, opts::HssOptions=HssOptions(T); args...
   end
 
   # call recompression recursively
+  context = RecursionTools.RecursionContext(multithreaded)
   if isbranch(hssA.A11)
-    _recompress!(hssA.A11, hssA.B12, copy(hssA.B21'), atol, rtol, multithreaded)
+    _recompress!(hssA.A11, hssA.B12, copy(hssA.B21'), atol, rtol, context)
   end
   if isbranch(hssA.A22)
-    _recompress!(hssA.A22, hssA.B21, copy(hssA.B12'), atol, rtol, multithreaded)
+    _recompress!(hssA.A22, hssA.B21, copy(hssA.B12'), atol, rtol, context)
   end
 
   return hssA
 end
 
-function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol, rtol, multithreaded::Bool) where {T}
+function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol, rtol, context) where {T}
   # compress B12
   Brow1 = [hssA.B12  hssA.R1*Brow]
   Bcol2 = [hssA.B12' hssA.W2*Bcol]
@@ -247,21 +248,22 @@ function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol
   end
 
   # call recompression recursively
-  task = RecursionTools.spawn(_recursive_compression_A11, (hssA, S2, T2, rn2, rm2, atol, rtol, multithreaded), multithreaded)
+  newContext = RecursionTools.updateAfterSpawn(context)
+  task = RecursionTools.spawn(_recursive_compression_A11, (hssA, S2, T2, rn2, rm2, atol, rtol, newContext), context)
   if isbranch(hssA.A22)
     Brow2 = hcat(hssA.B21, S1[:, rn1+1:end])
     Bcol2 = hcat(hssA.B12', T1[:, rm1+1:end])
-    _recompress!(hssA.A22, Brow2, Bcol2, atol, rtol, multithreaded)
+    _recompress!(hssA.A22, Brow2, Bcol2, atol, rtol, newContext)
   end
   RecursionTools.wait(task)
   return hssA
 end
 
-function _recursive_compression_A11(hssA, S2, T2, rn2, rm2, atol, rtol, multithreaded)
+function _recursive_compression_A11(hssA, S2, T2, rn2, rm2, atol, rtol, context)
   if isbranch(hssA.A11)
     Brow1 = hcat(hssA.B12, S2[:, rn2+1:end])
     Bcol1 = hcat(hssA.B21', T2[:, rm2+1:end])
-    _recompress!(hssA.A11, Brow1, Bcol1, atol, rtol, multithreaded)
+    _recompress!(hssA.A11, Brow1, Bcol1, atol, rtol, context)
   end
 end
 

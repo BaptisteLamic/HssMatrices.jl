@@ -18,8 +18,38 @@ struct SimpleRecursion{T,G} <: AbstractRecursion
     args::G
 end
 
-function spawn(f, args, threaded)
+struct RecursionContext
+    maxSplittingDepth::Int
+    depth::Int
+end
+
+function RecursionContext(multithreaded::Bool)
+    if multithreaded
+        maxSplittingDepth = log2(Threads.nthreads())+1
+    else 
+        maxSplittingDepth = 0
+    end
+    return RecursionContext(maxSplittingDepth,0)
+end
+
+function hasToSpawn(context::RecursionContext)
+    return context.depth<context.maxSplittingDepth
+end
+
+function updateAfterSpawn(context::RecursionContext)
+    return RecursionContext(context.maxSplittingDepth, context.depth+1)
+end
+
+function spawn(f, args, threaded::Bool)
     if threaded
+        return ThreadedRecursion(Threads.@spawn f(args...))
+    else
+        return SimpleRecursion(f, args)
+    end
+end
+
+function spawn(f, args, context::RecursionContext)
+    if hasToSpawn(context)
         return ThreadedRecursion(Threads.@spawn f(args...))
     else
         return SimpleRecursion(f, args)

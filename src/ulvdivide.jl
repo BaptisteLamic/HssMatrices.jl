@@ -10,29 +10,33 @@
 # Written by Boris Bonev, Feb. 2021
 
 # function for acess that imitate the behavior in LinearAlgebra.jl
-ldiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool=HssOptions().multithreaded) = _ldiv!(copy(hssA), hssB, multithreaded)
+function ldiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool=HssOptions().multithreaded)
+  context = RecursionTools.RecursionContext(multithreaded)
+  _ldiv!(copy(hssA), hssB, context)
+end
 # lazy implementation of rdiv!
 function rdiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool=HssOptions().multithreaded)
-  hssA = adjoint(_ldiv!(adjoint(hssB), adjoint(hssA), multithreaded))
+  context = RecursionTools.RecursionContext(multithreaded)
+  hssA = adjoint(_ldiv!(adjoint(hssB), adjoint(hssA), context))
 end
 
 ## ULV divide algorithm to apply the inverse to another HSS matrix
 # temporary name for function that actually just computes the ULV factorization
 # the cluster structure in hssA and hssB should be compatible w/e that means...
-function _ldiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool)
+function _ldiv!(hssA::HssMatrix, hssB::HssMatrix, context::RecursionTools.RecursionContext)
   if isleaf(hssA)
     D, U, V = _hssleaf(hssB)
     D = full(hssA) \ D
     return HssMatrix(D, U, V, isroot(hssB))
   else
     # bottom-up stage of the ULV solution algorithm
-    hssL, QU, QL, QV, mk, nk, ktree  = _ulvfactor_leaves!(hssA, 0, multithreaded)
-    hssB = _utransforms!(hssB, QU, multithreaded)
-    hssQB = _extract_crows(hssB, nk, multithreaded)
-    hssY0 = _ltransforms!(hssB, QL, multithreaded)
+    hssL, QU, QL, QV, mk, nk, ktree  = _ulvfactor_leaves!(hssA, 0, context)
+    hssB = _utransforms!(hssB, QU, context)
+    hssQB = _extract_crows(hssB, nk, context)
+    hssY0 = _ltransforms!(hssB, QL, context)
 
     # early exit if all remaining blocks are 0.
-    if size(hssQB,1) == 0; return hssB = _vtransforms!(hssB, QV, multithreaded); end
+    if size(hssQB,1) == 0; return hssB = _vtransforms!(hssB, QV, context); end
     # TODO: this still fails if only one hss block gets fully eliminated - fix that!
 
     hssQB = hssQB - hssL * hssY0 # multiply triangularized part with solved part and substract from the
@@ -40,15 +44,15 @@ function _ldiv!(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool)
     hssQB = prune_leaves!(hssQB)
 
     # reduce to the remainder block (and regain sqare HSS matrix for recursive division)
-    hssL = _extract_ccols(hssL, nk, multithreaded) # extract uncompressed rows to form Matrix with one less level
+    hssL = _extract_ccols(hssL, nk, context) # extract uncompressed rows to form Matrix with one less level
     hssL = prune_leaves!(hssL)
 
     # recursively call mldivide
-    hssY1 = _ldiv!(hssL, hssQB, multithreaded)
+    hssY1 = _ldiv!(hssL, hssQB, context)
 
     # do the unpacking
     hssB = _unpackadd_rows!(hssY0, hssY1, ktree)
-    hssB = _vtransforms!(hssB, QV, multithreaded)
+    hssB = _vtransforms!(hssB, QV, context)
     hssB = recompress!(hssB)
   end
 end
@@ -85,7 +89,7 @@ function _ulvreduce!(D::Matrix{T}, U::Matrix{T}, V::Matrix{T}) where T
 end
 
 # recursive function that operates only on the leaves
-function _ulvfactor_leaves!(hssA::HssMatrix{T}, co::Int, multithreaded::Bool) where T
+function _ulvfactor_leaves!(hssA::HssMatrix{T}, co::Int, context) where T
   if isleaf(hssA)
     cols = collect(co .+ (1:size(hssA,2)))
     m, n = size(hssA.D)
@@ -97,8 +101,8 @@ function _ulvfactor_leaves!(hssA::HssMatrix{T}, co::Int, multithreaded::Bool) wh
     return HssMatrix(D, U, V, hssA.rootnode), QU, QL, QV, BinaryNode(mk), BinaryNode(nk), BinaryNode(k)
   else
     m1, n1 = hssA.sz1; m2, n2 = hssA.sz2
-    task = RecursionTools.spawn(_ulvfactor_leaves!,(hssA.A11, co, multithreaded), multithreaded)
-    hssA.A22, QU2, QL2, QV2, mk2, nk2, k2 = _ulvfactor_leaves!(hssA.A22, co+n1, multithreaded)
+    task = RecursionTools.spawn(_ulvfactor_leaves!,(hssA.A11, co, context), context)
+    hssA.A22, QU2, QL2, QV2, mk2, nk2, k2 = _ulvfactor_leaves!(hssA.A22, co+n1, context)
     hssA.A11, QU1, QL1, QV1, mk1, nk1, k1 = RecursionTools.fetch(task)
     # update sizes
     hssA.sz1 = size(hssA.A11); hssA.sz2 = size(hssA.A22)
@@ -145,12 +149,13 @@ end
 # generate branch level recursive function for each transform
 for (f,g) in zip((:_utransforms!, :_ltransforms!, :_vtransforms!), (:_utransforms_kernel!, :_ltransforms_kernel!, :_vtransforms_kernel!))
   @eval begin
-    function $f(hssA::HssMatrix, Qtree::BinaryNode, multithreaded::Bool)
+    function $f(hssA::HssMatrix, Qtree::BinaryNode, context)
       if isleaf(hssA)
         hssA = $g(hssA, Qtree)
       else
-        task = RecursionTools.spawn($f,(hssA.A11, Qtree.left,multithreaded), multithreaded)
-        hssA.A22 = $f(hssA.A22, Qtree.right,multithreaded)
+        newContext = RecursionTools.updateAfterSpawn(context)
+        task = RecursionTools.spawn($f,(hssA.A11, Qtree.left,newContext), context)
+        hssA.A22 = $f(hssA.A22, Qtree.right,newContext)
         hssA.A11 = fetch(task)
         hssA.sz1 = size(hssA.A11); hssA.sz2 = size(hssA.A22)
         return hssA
@@ -168,12 +173,13 @@ _extract_ccols_kernel(hssA::HssMatrix, ntree::BinaryNode{Int}) = HssMatrix(hssA.
 # generate branch routines via metaprogramming
 for (f,g) in zip((:_extract_nrows, :_extract_crows, :_extract_ncols, :_extract_ccols), (:_extract_nrows_kernel, :_extract_crows_kernel, :_extract_ncols_kernel, :_extract_ccols_kernel)) 
   @eval begin
-    function $f(hssA::HssMatrix, ntree::BinaryNode{Int}, multithreaded::Bool)
+    function $f(hssA::HssMatrix, ntree::BinaryNode{Int}, context)
       if isleaf(hssA)
         hssA = $g(hssA, ntree)
       else
-        task = RecursionTools.spawn($f, (hssA.A11, ntree.left, multithreaded), multithreaded)
-        A22 = $f(hssA.A22, ntree.right, multithreaded)
+        newContext = RecursionTools.updateAfterSpawn(context)
+        task = RecursionTools.spawn($f, (hssA.A11, ntree.left, newContext), context)
+        A22 = $f(hssA.A22, ntree.right, newContext)
         A11 = RecursionTools.fetch(task)
         return HssMatrix(A11, A22, hssA.B12, hssA.B21, hssA.R1, hssA.W1, hssA.R2, hssA.W2, hssA.rootnode)
       end

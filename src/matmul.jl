@@ -21,21 +21,23 @@ function mul!(C::AbstractMatrix, hssA::HssMatrix, B::AbstractMatrix, α::Number,
   if isleaf(hssA)
     return mul!(C, hssA.D, B, α, β)
   else
+    context = RecursionTools.RecursionContext(multithreaded)
     hssA = rooted(hssA) # this is to avoid top-generators getting in the way if this is called on a sub-block of the HSS matrix
-    Z = _matmatup(hssA, B, multithreaded) # saves intermediate steps of multiplication in a binary tree structure
-    return _matmatdown!(C, hssA, B, Z, nothing, α, β, multithreaded)
+    Z = _matmatup(hssA, B, context) # saves intermediate steps of multiplication in a binary tree structure
+    return _matmatdown!(C, hssA, B, Z, nothing, α, β, context)
   end
 end
 
 ## auxiliary functions for the fast multiplication algorithm
 # post-ordered step of mat-vec
-function _matmatup(hssA::HssMatrix, B::AbstractMatrix, multithreaded::Bool)
+function _matmatup(hssA::HssMatrix, B::AbstractMatrix, context)
   if isleaf(hssA)
     return BinaryNode(hssA.V' * B)
   else
     n1 = hssA.sz1[2]
-    task = RecursionTools.spawn( _matmatup, (hssA.A11, B[1:n1,:],multithreaded), multithreaded)
-    Z2 = _matmatup(hssA.A22, B[n1+1:end,:],multithreaded)
+    newContext = RecursionTools.updateAfterSpawn(context)
+    task = RecursionTools.spawn( _matmatup, (hssA.A11, B[1:n1,:],newContext), context)
+    Z2 = _matmatup(hssA.A22, B[n1+1:end,:],newContext)
     Z1 = RecursionTools.fetch(task)
     Z = BinaryNode(hssA.W1'*Z1.data .+ hssA.W2'*Z2.data, Z1, Z2)
     return Z
@@ -43,7 +45,7 @@ function _matmatup(hssA::HssMatrix, B::AbstractMatrix, multithreaded::Bool)
 end
 
 function _matmatdown!(C::AbstractMatrix{T}, hssA::HssMatrix{T}, B::AbstractMatrix{T}, Z::BinaryNode{AT}, F::Union{AbstractMatrix{T}, Nothing},
-   α::Number, β::Number, multithreaded::Bool) where {T, AT<:AbstractArray{T}}
+   α::Number, β::Number, context) where {T, AT<:AbstractArray{T}}
   if isleaf(hssA)
     mul!(C, hssA.D, B , α, β)
     if !isnothing(F); mul!(C, hssA.U, F , α, 1.); end
@@ -57,8 +59,9 @@ function _matmatdown!(C::AbstractMatrix{T}, hssA::HssMatrix{T}, B::AbstractMatri
       F1 = hssA.B12 * Z.right.data
       F2 = hssA.B21 * Z.left.data
     end
-    task = RecursionTools.spawn(_matmatdown!, (@view(C[1:m1,:]), hssA.A11, @view(B[1:n1,:]), Z.left, F1, α, β, multithreaded),multithreaded)
-    _matmatdown!(@view(C[m1+1:end,:]), hssA.A22, @view(B[n1+1:end,:]), Z.right, F2, α, β, multithreaded)
+    newContext = RecursionTools.updateAfterSpawn(context)
+    task = RecursionTools.spawn(_matmatdown!, (@view(C[1:m1,:]), hssA.A11, @view(B[1:n1,:]), Z.left, F1, α, β, newContext),context)
+    _matmatdown!(@view(C[m1+1:end,:]), hssA.A22, @view(B[n1+1:end,:]), Z.right, F2, α, β, context)
     RecursionTools.wait(task)
     return C
   end
@@ -72,13 +75,15 @@ function *(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool = HssOptions().
     hssA = rooted(hssA); hssB = rooted(hssB)
     # implememnt cluster equality checks
     #if cluster(hssA,2) != cluster(hssB,1); throw(DimensionMismatch("clusters of hssA and hssB must be matching")) end
-    Z = _matmatup(hssA, hssB, multithreaded ) # saves intermediate steps of multiplication in a binary tree structure
+    context = RecursionTools.RecursionContext(multithreaded)
+    Z = _matmatup(hssA, hssB, context ) # saves intermediate steps of multiplication in a binary tree structure
     F1 = hssA.B12 * Z.right.data * hssB.B21
     F2 = hssA.B21 * Z.left.data * hssB.B12
     B12 = blkdiagm(hssA.B12, hssB.B12)
     B21 = blkdiagm(hssA.B21, hssB.B21)
-    task = RecursionTools.spawn(_matmatdown!,(hssA.A22, hssB.A22, Z.right, F2, multithreaded),multithreaded)
-    A11 = _matmatdown!(hssA.A11, hssB.A11, Z.left, F1, multithreaded)
+    newContext = RecursionTools.updateAfterSpawn(context)
+    task = RecursionTools.spawn(_matmatdown!,(hssA.A22, hssB.A22, Z.right, F2, newContext),context)
+    A11 = _matmatdown!(hssA.A11, hssB.A11, Z.left, F1, newContext)
     A22 = RecursionTools.fetch(task)
     hssC = HssMatrix(A11, A22, B12, B21, true)
   else
@@ -87,18 +92,19 @@ function *(hssA::HssMatrix, hssB::HssMatrix, multithreaded::Bool = HssOptions().
   return hssC
 end
 
-function _matmatup(hssA::HssMatrix{T}, hssB::HssMatrix{T}, multithreaded::Bool) where T<:Number
+function _matmatup(hssA::HssMatrix{T}, hssB::HssMatrix{T}, context) where T<:Number
   if isleaf(hssA) & isleaf(hssB)
     return BinaryNode{Matrix{T}}(hssA.V' * hssB.U)
   elseif isbranch(hssA) && isbranch(hssB)
-    task = RecursionTools.spawn(_matmatup, (hssA.A22, hssB.A22, multithreaded), multithreaded)
-    Z1 = _matmatup(hssA.A11, hssB.A11, multithreaded)
+    newContext = RecursionTools.updateAfterSpawn(context)
+    task = RecursionTools.spawn(_matmatup, (hssA.A22, hssB.A22, newContext), context)
+    Z1 = _matmatup(hssA.A11, hssB.A11, context)
     Z2 = fetch(task)
     return BinaryNode(hssA.W1' * Z1.data * hssB.R1 + hssA.W2' * Z2.data * hssB.R2, Z1, Z2)
   end
 end
 
-function _matmatdown!(hssA::HssMatrix{T}, hssB::HssMatrix{T}, Z::BinaryNode{Matrix{T}}, F::Matrix{T}, multithreaded::Bool) where T
+function _matmatdown!(hssA::HssMatrix{T}, hssB::HssMatrix{T}, Z::BinaryNode{Matrix{T}}, F::Matrix{T}, context) where T
   if isleaf(hssA) & isleaf(hssB)
     D = hssA.D * hssB.D + hssA.U * F * hssB.V'
     U = [hssA.U hssA.D * hssB.U]
@@ -114,8 +120,9 @@ function _matmatdown!(hssA::HssMatrix{T}, hssB::HssMatrix{T}, Z::BinaryNode{Matr
     W1 = [hssA.W1 zeros(T,size(hssA.W1,1), size(hssB.W1,2)); hssB.B21' * Z.right.data' * hssA.W2 hssB.W1];
     R2 = [hssA.R2 hssA.B21 * Z.left.data * hssB.R1; zeros(T,size(hssB.R2,1), size(hssA.R2,2)) hssB.R2];
     W2 = [hssA.W2 zeros(T,size(hssA.W2,1), size(hssB.W2,2)); hssB.B12' * Z.left.data' * hssA.W1 hssB.W2];
-    task = RecursionTools.spawn(_matmatdown!,(hssA.A11, hssB.A11, Z.left, F1, multithreaded),multithreaded)
-    A22 = _matmatdown!(hssA.A22, hssB.A22, Z.right, F2, multithreaded)
+    newContext = RecursionTools.updateAfterSpawn(context)
+    task = RecursionTools.spawn(_matmatdown!,(hssA.A11, hssB.A11, Z.left, F1, newContext),context)
+    A22 = _matmatdown!(hssA.A22, hssB.A22, Z.right, F2, newContext)
     A11 = RecursionTools.fetch(task)
     return HssMatrix(A11, A22, B12, B21, R1, W1, R2, W2, false)
   else

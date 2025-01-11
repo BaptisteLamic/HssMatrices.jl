@@ -61,17 +61,21 @@ end
 #offdiag(hssA::HssNode, ::Val{:upper}) = generators(hssA.A11)[1]*hssA.B12*generators(hssA.A11)[2]'
 
 ## orthogonalize generators
-function orthonormalize_generators!(hssA::HssMatrix{T}; multithreaded = HssOptions().multithreaded) where T
+function orthonormalize_generators!(hssA::HssMatrix{T}; multithreaded::Bool = HssOptions().multithreaded) where T
+  return orthonormalize_generators!(hssA, RecursionTools.RecursionContext(multithreaded) )
+end
+function orthonormalize_generators!(hssA::HssMatrix{T}, context::RecursionTools.RecursionContext) where T
   if isleaf(hssA)
     U1 = pqrfact!(hssA.A11.U, sketch=:none); hssA.U = Matrix(U1.Q)
     V1 = pqrfact!(hssA.A11.V, sketch=:none); hssA.V = Matrix(V1.Q)
   else
-    task = RecursionTools.spawn(_orthogonalise_A11!, (hssA,multithreaded), multithreaded)
+    newContext = RecursionTools.updateAfterSpawn(context)
+    task = RecursionTools.spawn(_orthogonalise_A11!, (hssA,newContext), context)
     if isleaf(hssA.A22)
       U2 = pqrfact!(hssA.A22.U, sketch=:none); hssA.A22.U = Matrix(U2.Q)
       V2 = pqrfact!(hssA.A22.V, sketch=:none); hssA.A22.V = Matrix(V2.Q)
     else
-      hssA.A22 = orthonormalize_generators!(hssA.A22)
+      hssA.A22 = orthonormalize_generators!(hssA.A22, newContext)
       U2 = pqrfact!([hssA.A22.R1; hssA.A22.R2], sketch=:none)
       V2 = pqrfact!([hssA.A22.W1; hssA.A22.W2], sketch=:none)
       rm1 = size(hssA.A22.R1, 1)
@@ -98,14 +102,14 @@ function orthonormalize_generators!(hssA::HssMatrix{T}; multithreaded = HssOptio
   return hssA
 end
 
-function _orthogonalise_A11!(hssA, multithreaded)
+function _orthogonalise_A11!(hssA, context)
   if isleaf(hssA.A11)
     U1 = pqrfact!(hssA.A11.U, sketch=:none)
     hssA.A11.U = Matrix(U1.Q)
     V1 = pqrfact!(hssA.A11.V, sketch=:none)
     hssA.A11.V = Matrix(V1.Q)
   else
-    hssA.A11 = orthonormalize_generators!(hssA.A11, multithreaded = multithreaded)
+    hssA.A11 = orthonormalize_generators!(hssA.A11, context)
     U1 = pqrfact!([hssA.A11.R1; hssA.A11.R2], sketch=:none)
     V1 = pqrfact!([hssA.A11.W1; hssA.A11.W2], sketch=:none)
     rm1 = size(hssA.A11.R1, 1)

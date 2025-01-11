@@ -1,5 +1,6 @@
 include("../src/HssMatrices.jl")
-using .HssMatrices
+#using Revise
+using HssMatrices
 using LinearAlgebra
 using BenchmarkTools
 using Random
