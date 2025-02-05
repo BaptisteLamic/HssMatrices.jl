@@ -25,7 +25,7 @@ end
 
 function RecursionContext(multithreaded::Bool)
     if multithreaded
-        maxSplittingDepth = log2(Threads.nthreads())+1
+        maxSplittingDepth = Int(round(log2(Threads.nthreads())))+1
     else 
         maxSplittingDepth = 0
     end

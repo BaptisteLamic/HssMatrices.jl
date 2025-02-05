@@ -1,6 +1,6 @@
 include("../src/HssMatrices.jl")
 #using Revise
-using HssMatrices
+using .HssMatrices
 using LinearAlgebra
 using BenchmarkTools
 using Random
@@ -9,6 +9,9 @@ Random.seed!(123)
 
 for multithreaded = (false, true)
     @show multithreaded
+    if multithreaded
+        @show Threads.nthreads()
+    end
     HssMatrices.setopts(multithreaded=multithreaded)
     ### run benchmarks on Cauchy matrix
     K(x, y) = abs(x - y) >= 0.001 ? 1 / (x - y) : 10000.0
