@@ -109,18 +109,27 @@ getindex(hssA::HssMatrix, ::Colon, j) = getindex(hssA, 1:size(hssA,1), j)
 function getindex(hssA::HssMatrix{T}, i::Vector{Int}, j::Vector{Int}) where T
   m, n  = size(hssA)
   ip = sortperm(i); jp = sortperm(j)
-  if (length(i) == 0 || length(j) == 0) return Matrix{T}(undef, length(i), length(j)) end
-  return full(_getidx(hssA, i[ip], j[jp]))[invperm(ip), invperm(jp)]
+  if (length(i) == 0 || length(j) == 0)
+     return Matrix{T}(undef, length(i), length(j))
+  end
+  return full(_getidx(hssA, copy(i[ip]), copy(j[jp])))[invperm(ip), invperm(jp)]
 end
 
 # First construct a sub-HSS matrix and then call full()
-function _getidx(hssA::HssMatrix, i::Vector{Int}, j::Vector{Int})
+# Assume that the index vectors are sorted
+function _getidx(hssA::HssMatrix, i, j)
   if isleaf(hssA)
     HssMatrix(hssA.D[i,j], hssA.U[i,:], hssA.V[j,:])
   else
     m1, n1 = hssA.sz1
-    i1 = i[i .<= m1]; j1 = j[j .<= n1]
-    i2 = i[i .> m1] .- m1; j2 = j[j .> n1] .- n1
+    max_i1 = findfirst(idx -> idx >= m1, i)
+    max_i1 = isnothing(max_i1) ? length(i) : max_i1
+    max_j1 = findfirst(idx -> idx >= n1, j)
+    max_j1 = isnothing(max_j1) ? length(j) : max_j1
+    @views i1 = i[1:max_i1]
+    @views j1 = j[1:max_j1]
+    @views i2 = i[max_i1 + 1:end] .- m1;
+    @views j2 = j[max_j1 + 1:end] .- n1
     A11 = _getidx(hssA.A11, i1, j1)
     A22 = _getidx(hssA.A22, i2, j2)
     return HssMatrix(A11, A22, hssA.B12, hssA.B21, hssA.R1, hssA.W1, hssA.R2, hssA.W2)
@@ -297,13 +306,13 @@ function _full!(hssA::HssMatrix, A::Matrix,  U::Matrix, V::Matrix, ro::Int, co::
     ru2, rv2 = gensize(hssA.A22)
     _full!(hssA.A11, A, U, V, ro, co)
     _full!(hssA.A22, A, U, V, ro+m1, co+n1)
-    A[ro+1:ro+m1, co+n1+1:co+n1+n2] = U[ro+1:ro+m1, 1:ru1]*hssA.B12*V[co+n1+1:co+n1+n2, 1:rv2]'
-    A[ro+m1+1:ro+m1+m2, co+1:co+n1] = U[ro+m1+1:ro+m1+m2, 1:ru2]*hssA.B21*V[co+1:co+n1, 1:rv1]'
+    @views A[ro+1:ro+m1, co+n1+1:co+n1+n2] = U[ro+1:ro+m1, 1:ru1]*hssA.B12*V[co+n1+1:co+n1+n2, 1:rv2]'
+    @views A[ro+m1+1:ro+m1+m2, co+1:co+n1] = U[ro+m1+1:ro+m1+m2, 1:ru2]*hssA.B21*V[co+1:co+n1, 1:rv1]'
     if !rootnode
-      U[ro+1:ro+m1, 1:size(hssA.R1,2)] = U[ro+1:ro+m1, 1:ru1]*hssA.R1
-      U[ro+m1+1:ro+m1+m2, 1:size(hssA.R2,2)] = U[ro+m1+1:ro+m1+m2, 1:ru2]*hssA.R2
-      V[co+1:co+n1, 1:size(hssA.W1,2)] = V[co+1:co+n1, 1:rv1]*hssA.W1
-      V[co+n1+1:co+n1+n2, 1:size(hssA.W2,2)] = V[co+n1+1:co+n1+n2, 1:rv2]*hssA.W2
+     @views U[ro+1:ro+m1, 1:size(hssA.R1,2)] = U[ro+1:ro+m1, 1:ru1]*hssA.R1
+     @views U[ro+m1+1:ro+m1+m2, 1:size(hssA.R2,2)] = U[ro+m1+1:ro+m1+m2, 1:ru2]*hssA.R2
+     @views V[co+1:co+n1, 1:size(hssA.W1,2)] = V[co+1:co+n1, 1:rv1]*hssA.W1
+     @views V[co+n1+1:co+n1+n2, 1:size(hssA.W2,2)] = V[co+n1+1:co+n1+n2, 1:rv2]*hssA.W2
     end
   end
 end

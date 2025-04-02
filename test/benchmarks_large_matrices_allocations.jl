@@ -1,3 +1,4 @@
+#using Revise
 using HssMatrices
 using LinearAlgebra
 using BenchmarkTools
@@ -74,51 +75,19 @@ function run_benchmarks(multithreaded, blas_threads)
     HssMatrices.setopts(multithreaded=multithreaded)
     hssA, invA, rcl, ccl = construct_test_matrix()
 
-    # Run benchmarks
-    results = Dict()
-    println("Running benchmark: getindex")
-    results[:getindex] = benchmark_getindex(hssA)
-    println("Running benchmark: randcompress")
-    results[:randcompress] = benchmark_randcompress(invA, rcl, ccl)
-    println("Running benchmark: recompress")
-    results[:recompress] = benchmark_recompress(hssA)
-    println("Running benchmark: proper")
-    results[:proper] = benchmark_proper(hssA)
-    println("Running benchmark: addition")
-    results[:addition] = benchmark_addition(hssA)
-    println("Running benchmark: multiplication")
-    results[:multiplication] = benchmark_multiplication(hssA)
-    println("Running benchmark: ulvfactsolve")
-    results[:ulvfactsolve] = benchmark_ulvfactsolve(hssA)
-    println("Running benchmark: hssldivide")
-    results[:hssldivide] = benchmark_hssldivide(hssA, ccl)
+     # Run benchmarks
+     results = Dict()
+     println("Running benchmark: hssldivide")
+     results[:hssldivide] = benchmark_hssldivide(hssA, ccl)
 
-    return results
+    
+     return results
 end
-
+using MKL
 #First evaluate the nominal single-threaded performance
-reference_results = run_benchmarks(false, Sys.CPU_THREADS)
+reference_results = run_benchmarks(true, Sys.CPU_THREADS)
 #Compute the performance for the multithreaded scenario using only 1 openBlas thread
-multithreaded_results = run_benchmarks(true, 1)
-speedup_results = Dict()
-for eachKey in keys(reference_results)
-    speedup_results[eachKey] = median(reference_results[eachKey]).time / median(multithreaded_results[eachKey]).time 
-end
-speedup_plot = bar(
-    string.(keys(speedup_results)),
-    collect(values(speedup_results)),
-    xlabel="Benchmark",
-    ylabel="Speedup",
-    title="Julia threads compared to OpenBLAS threads",
-    size=(800, 600);  # Increase the size of the plot
-    legend=false
-)
-savefig("speedup_plot.png")
-
-hssA = construct_test_matrix()[1]
-plt_right = plotranks(hssA)
-savefig("hssranks_hssA.png")
-
-
-
-
+using Profile, PProf
+Profile.Allocs.clear()
+Profile.Allocs.@profile sample_rate=0.001 run_benchmarks(true,  Sys.CPU_THREADS)
+PProf.Allocs.pprof()
