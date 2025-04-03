@@ -122,14 +122,14 @@ function _getidx(hssA::HssMatrix, i, j)
     HssMatrix(hssA.D[i,j], hssA.U[i,:], hssA.V[j,:])
   else
     m1, n1 = hssA.sz1
-    max_i1 = findfirst(idx -> idx >= m1, i)
-    max_i1 = isnothing(max_i1) ? length(i) : max_i1
-    max_j1 = findfirst(idx -> idx >= n1, j)
-    max_j1 = isnothing(max_j1) ? length(j) : max_j1
+    max_i1 = findlast(idx -> idx <= m1, i)
+    max_i1 = isnothing(max_i1) ? 0 : max_i1
+    max_j1 = findlast(idx -> idx <= n1, j)
+    max_j1 = isnothing(max_j1) ? 0 : max_j1
     @views i1 = i[1:max_i1]
     @views j1 = j[1:max_j1]
-    @views i2 = i[max_i1 + 1:end] .- m1;
-    @views j2 = j[max_j1 + 1:end] .- n1
+    @views i2 = i[max_i1+1:end] .- m1;
+    @views j2 = j[max_j1+1:end] .- n1
     A11 = _getidx(hssA.A11, i1, j1)
     A22 = _getidx(hssA.A22, i2, j2)
     return HssMatrix(A11, A22, hssA.B12, hssA.B21, hssA.R1, hssA.W1, hssA.R2, hssA.W2)
