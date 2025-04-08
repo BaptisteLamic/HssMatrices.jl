@@ -1,4 +1,4 @@
-#using Revise
+using Revise
 using HssMatrices
 using LinearAlgebra
 using BenchmarkTools
@@ -83,11 +83,11 @@ function run_benchmarks(multithreaded, blas_threads)
     
      return results
 end
-using MKL
-#First evaluate the nominal single-threaded performance
-reference_results = run_benchmarks(true, Sys.CPU_THREADS)
 #Compute the performance for the multithreaded scenario using only 1 openBlas thread
+hssA, invA, rcl, ccl = construct_test_matrix()
+println("Warmup")
+benchmark_hssldivide(hssA, ccl)
 using Profile, PProf
 Profile.Allocs.clear()
-Profile.Allocs.@profile sample_rate=0.001 run_benchmarks(true,  Sys.CPU_THREADS)
+Profile.Allocs.@profile sample_rate=0.001 benchmark_hssldivide(hssA, ccl)
 PProf.Allocs.pprof()
