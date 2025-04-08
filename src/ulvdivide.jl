@@ -79,8 +79,7 @@ function _ulvreduce!(D::Matrix{T}, U::Matrix{T}, V::Matrix{T}) where T
     ormql!('L', adj, qlf..., D) # transform the diagonal block
     # Form the LQ decomposition of the first m-k rows of D
     lqf = gelqf!(D[1:end-k,:])
-    L1 = tril(lqf[1])
-    @views L1 = L1[:,1:nk]
+    L1 = tril(lqf[1])[:,1:nk]
     L2 =  D[end-k+1:end,:]
     L2 = ormlq!('R', adj, lqf..., L2) # update the bottom block of the diagonal block
     V = ormlq!('L', 'N', lqf..., V) # compute the updated off-diagonal generators on the right

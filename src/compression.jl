@@ -213,7 +213,7 @@ function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol
   Q2, T1 = _compress_block!(Bcol2, atol, rtol)
   # get the original number of columns in B12
   rm1, rn2 = size(hssA.B12)
-  hssA.B12 = S2[:,1:rn2]*Q2
+  @views hssA.B12 = S2[:,1:rn2]*Q2
   hssA.R1 = P1'*hssA.R1
   hssA.W2 = Q2'*hssA.W2
   # compress B21
@@ -223,7 +223,7 @@ function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol
   Q1, T2 = _compress_block!(Bcol1, atol, rtol)
   # get the original number of columns in B21
   rm2, rn1 = size(hssA.B21)
-  hssA.B21 = S1[:,1:rn1]*Q1
+  @views hssA.B21 = S1[:,1:rn1]*Q1
   hssA.R2 = P2'*hssA.R2
   hssA.W1 = Q1'*hssA.W1
   # update generators of A11
@@ -251,8 +251,8 @@ function _recompress!(hssA::HssMatrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, atol
   newContext = RecursionTools.updateAfterSpawn(context)
   task = RecursionTools.spawn(_recursive_compression_A11, (hssA, S2, T2, rn2, rm2, atol, rtol, newContext), context)
   if isbranch(hssA.A22)
-    Brow2 = hcat(hssA.B21, S1[:, rn1+1:end])
-    Bcol2 = hcat(hssA.B12', T1[:, rm1+1:end])
+    @views Brow2 = hcat(hssA.B21, S1[:, rn1+1:end])
+    @views Bcol2 = hcat(hssA.B12', T1[:, rm1+1:end])
     _recompress!(hssA.A22, Brow2, Bcol2, atol, rtol, newContext)
   end
   RecursionTools.wait(task)

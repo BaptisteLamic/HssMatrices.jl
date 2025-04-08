@@ -91,13 +91,13 @@ function orthonormalize_generators!(hssA::HssMatrix{T}, context::RecursionTools.
     ipU1 = invperm(U1.p); ipV1 = invperm(V1.p)
     ipU2 = invperm(U2.p); ipV2 = invperm(V2.p)
 
-    hssA.B12 = U1.R[:, ipU1]*hssA.B12*V2.R[:, ipV2]'
-    hssA.B21 = U2.R[:, ipU2]*hssA.B21*V1.R[:, ipV1]'
+    @views hssA.B12 = U1.R[:, ipU1]*hssA.B12*V2.R[:, ipV2]'
+    @views hssA.B21 = U2.R[:, ipU2]*hssA.B21*V1.R[:, ipV1]'
 
-    hssA.R1 = U1.R[:, ipU1]*hssA.R1
-    hssA.R2 = U2.R[:, ipU2]*hssA.R2
-    hssA.W1 = V1.R[:, ipV1]*hssA.W1
-    hssA.W2 = V2.R[:, ipV2]*hssA.W2
+    @views hssA.R1 = U1.R[:, ipU1]*hssA.R1
+    @views hssA.R2 = U2.R[:, ipU2]*hssA.R2
+    @views hssA.W1 = V1.R[:, ipV1]*hssA.W1
+    @views hssA.W2 = V2.R[:, ipV2]*hssA.W2
   end
   return hssA
 end
