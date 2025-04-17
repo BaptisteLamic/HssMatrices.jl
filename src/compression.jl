@@ -19,13 +19,19 @@
 
 
 # Utility routine to provide access to pivoted rank-revealing qr
-function _compress_block!(A::AbstractMatrix{T}, atol::Float64, rtol::Float64) where T
+function _compress_block(A::AbstractMatrix{T}, atol::Float64, rtol::Float64) where T
   #Q, R, p = prrqr!(A, atol, rtol)
   #rk = min(size(R)...)
   #return Q[:,1:rk], R[1:rk, invperm(p)]
   # temporarily using prrqr of LowRankApprox.jl - may be replaced in the future to reduce dependencies
   F = pqrfact(A; atol = atol, rtol = rtol, sketch=:none, pqrfact_retval = "qr")
   #rk = min(size(F.R)...)
+  return F.Q, F.R[:, invperm(F.p)]
+end
+
+# Utility routine to provide access to pivoted rank-revealing qr
+function _compress_block!(A::AbstractMatrix{T}, atol::Float64, rtol::Float64) where T
+  F = pqrfact!(A; atol = atol, rtol = rtol, sketch=:none, pqrfact_retval = "qr")
   return F.Q, F.R[:, invperm(F.p)]
 end
 
@@ -67,8 +73,8 @@ function _compress!(A::Matrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, rows::UnitRa
   if rootnode
     return HssMatrix(A[rows, cols]), Brow, Bcol
   else
-    U, Brow = _compress_block!(Brow, atol, rtol)
-    V, Bcol = _compress_block!(Bcol', atol, rtol) #TODO: write code that is better at dealing with Julia's lazy transpose
+    U, Brow = _compress_block(Brow, atol, rtol)
+    V, Bcol = _compress_block(Bcol', atol, rtol) #TODO: write code that is better at dealing with Julia's lazy transpose
     return HssMatrix(A[rows, cols], U, V), Brow, copy(Bcol')
   end
 end
@@ -115,12 +121,12 @@ function _compress!(A::Matrix{T}, Brow::Matrix{T}, Bcol::Matrix{T}, rcl::Cluster
 
   if !rootnode
     # do the actual compression and disentangle blocks of the translation operators
-    R, Brow = _compress_block!(Brow, atol, rtol)
+    R, Brow = _compress_block(Brow, atol, rtol)
     R1 = R[1:rm1, :]
     R2 = R[rm1+1:end, :]
 
     X = copy(Bcol')
-    W, Bcol = _compress_block!(copy(Bcol'), atol, rtol);
+    W, Bcol = _compress_block(copy(Bcol'), atol, rtol);
     Bcol = copy(Bcol')
     W1 = W[1:rn1, :]
     W2 = W[rn1+1:end, :]
@@ -158,10 +164,10 @@ function recompress!(hssA::HssMatrix{T}, opts::HssOptions=HssOptions(T); args...
   orthonormalize_generators!(hssA)
 
   # compress B12, B21 via something that resembles the SVD
-  P1, S2 = _compress_block!(hssA.B12, atol, rtol)
-  Q2, T1 = _compress_block!(copy(hssA.B12'), atol, rtol)
-  P2, S1 = _compress_block!(hssA.B21, atol, rtol)
-  Q1, T2 = _compress_block!(copy(hssA.B21'), atol, rtol)
+  P1, S2 = _compress_block(hssA.B12, atol, rtol)
+  Q2, T1 = _compress_block!(hssA.B12', atol, rtol)
+  P2, S1 = _compress_block(hssA.B21, atol, rtol)
+  Q1, T2 = _compress_block!(hssA.B21', atol, rtol)
 
   hssA.B12 = S2*Q2
   hssA.B21 = S1*Q1
