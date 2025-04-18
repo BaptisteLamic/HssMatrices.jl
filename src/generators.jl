@@ -66,18 +66,18 @@ function orthonormalize_generators!(hssA::HssMatrix{T}; multithreaded::Bool = Hs
 end
 function orthonormalize_generators!(hssA::HssMatrix{T}, context::RecursionTools.RecursionContext) where T
   if isleaf(hssA)
-    U1 = pqrfact!(hssA.A11.U, sketch=:none); hssA.U = Matrix(U1.Q)
-    V1 = pqrfact!(hssA.A11.V, sketch=:none); hssA.V = Matrix(V1.Q)
+    U1 = pqrfact!(hssA.A11.U,  ); hssA.U = Matrix(U1.Q)
+    V1 = pqrfact!(hssA.A11.V,  ); hssA.V = Matrix(V1.Q)
   else
     newContext = RecursionTools.updateAfterSpawn(context)
     task = RecursionTools.spawn(_orthogonalise_A11!, (hssA,newContext), context)
     if isleaf(hssA.A22)
-      U2 = pqrfact!(hssA.A22.U, sketch=:none); hssA.A22.U = Matrix(U2.Q)
-      V2 = pqrfact!(hssA.A22.V, sketch=:none); hssA.A22.V = Matrix(V2.Q)
+      U2 = pqrfact!(hssA.A22.U,  ); hssA.A22.U = Matrix(U2.Q)
+      V2 = pqrfact!(hssA.A22.V,  ); hssA.A22.V = Matrix(V2.Q)
     else
       hssA.A22 = orthonormalize_generators!(hssA.A22, newContext)
-      U2 = pqrfact!([hssA.A22.R1; hssA.A22.R2], sketch=:none)
-      V2 = pqrfact!([hssA.A22.W1; hssA.A22.W2], sketch=:none)
+      U2 = pqrfact!([hssA.A22.R1; hssA.A22.R2],  )
+      V2 = pqrfact!([hssA.A22.W1; hssA.A22.W2],  )
       rm1 = size(hssA.A22.R1, 1)
       R = Matrix(U2.Q)
       hssA.A22.R1 = R[1:rm1,:]
@@ -104,14 +104,14 @@ end
 
 function _orthogonalise_A11!(hssA, context)
   if isleaf(hssA.A11)
-    U1 = pqrfact!(hssA.A11.U, sketch=:none)
+    U1 = pqrfact!(hssA.A11.U,  )
     hssA.A11.U = Matrix(U1.Q)
-    V1 = pqrfact!(hssA.A11.V, sketch=:none)
+    V1 = pqrfact!(hssA.A11.V,  )
     hssA.A11.V = Matrix(V1.Q)
   else
     hssA.A11 = orthonormalize_generators!(hssA.A11, context)
-    U1 = pqrfact!([hssA.A11.R1; hssA.A11.R2], sketch=:none)
-    V1 = pqrfact!([hssA.A11.W1; hssA.A11.W2], sketch=:none)
+    U1 = pqrfact!([hssA.A11.R1; hssA.A11.R2],  )
+    V1 = pqrfact!([hssA.A11.W1; hssA.A11.W2],  )
     rm1 = size(hssA.A11.R1, 1)
     R = Matrix(U1.Q)
     hssA.A11.R1 = R[1:rm1, :]

@@ -24,14 +24,14 @@ function _compress_block(A::AbstractMatrix{T}, atol::Float64, rtol::Float64) whe
   #rk = min(size(R)...)
   #return Q[:,1:rk], R[1:rk, invperm(p)]
   # temporarily using prrqr of LowRankApprox.jl - may be replaced in the future to reduce dependencies
-  F = pqrfact(A; atol = atol, rtol = rtol, sketch=:none, pqrfact_retval = "qr")
+  F = pqrfact(A; atol = atol, rtol = rtol,   pqrfact_retval = "qr")
   #rk = min(size(F.R)...)
   return F.Q, F.R[:, invperm(F.p)]
 end
 
 # Utility routine to provide access to pivoted rank-revealing qr
 function _compress_block!(A::AbstractMatrix{T}, atol::Float64, rtol::Float64) where T
-  F = pqrfact!(A; atol = atol, rtol = rtol, sketch=:none, pqrfact_retval = "qr")
+  F = pqrfact!(A; atol = atol, rtol = rtol,   pqrfact_retval = "qr")
   return F.Q, F.R[:, invperm(F.p)]
 end
 
