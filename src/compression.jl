@@ -293,7 +293,7 @@ function randcompress(A::AbstractMatOrLinOp{T}, rcl::ClusterTree, ccl::ClusterTr
 
   # compute initial sampling
   k = kest; r = opts.noversampling;
-  Ωcol = randn(T,n, k+r)
+  Ωcol = randn(n, k+r)
   Ωrow = randn(T,m, k+r)
   Scol = A*Ωcol # this should invoke the magic of the linearoperator.jl type
   Srow = A'*Ωrow
